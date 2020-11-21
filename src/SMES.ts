@@ -41,12 +41,36 @@
     we.pagePrepend(content)
         content 要添加到页首的内容
 
+
+    we.searchMain(搜索内容)
+        搜索主名字空间
+    we.searchUserpage(搜索内容)
+        搜索用户名字空间
+    we.searchProject(搜索内容)
+        搜索项目名字空间
+    we.searchFile(搜索内容)
+        搜索文件名字空间
+    we.searchMediaWiki(搜索内容)
+        搜索MediaWiki名字空间
+    we.searchTemplate(搜索内容)
+        搜索模板名字空间
+    we.searchHelp(搜索内容)
+        搜索帮助名字空间
+    we.searchCategory(搜索内容)
+        搜索分类名字空间
+    we.searchWidget(搜索内容)
+        搜索Widget名字空间
+    we.searchGadget(搜索内容)
+        搜索Gadget名字空间
+
     we.me()
         输出自己的用户名、UID、用户组
     we.note()
         详细教程`
-    let vers = '0.1.2', pref = '[SaltWikiEditHelper]'
+    let vers = '0.1.3', pref = '[SaltWikiEditHelper]'
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
     // 最基础的类
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
     class SaltOroginalClass {
         prefix: string
         ver: string
@@ -91,9 +115,12 @@
             return new Promise((resolve) => setTimeout(resolve, time));
         }
     }
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
     // 添加基础的删改，打印参数功能
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
     class SaltWikiEditOroginalClass extends SaltOroginalClass {
         mwApi: mwApi | undefined // 啊啊啊啊这个检查好烦啊（虽然帮忙找错很管用）
+        titleList: string = ''
         constructor() {
             super(pref, vers, myNote)
             // 参数
@@ -117,6 +144,7 @@
             timeInterval 替换的时间间隔，推荐 200-300，超过15个时建议 500，超过35个时建议 750，超过50个时建议 1000，超过100个时建议1500
             debug 是否进入debug模式
             */
+            let obj = this
             let pagelist = pages.split('; '); if (pagelist.length < 1) { return } // 不替换就不替换
             sum = sum || ''
             if (debug) { this.log(pagelist); this.log(sum) }
@@ -125,13 +153,66 @@
                 let summ = sum
                 setTimeout(() => {
                     if (!this.mwApi) { return } // mwApi 属性是mw.Api的实例，异步取得
-                    console.log(page); summ += ' 第 ' + (i + 1) + '/' + pagelist.length + ' 个'
+                    obj.log(page);
+                    summ += ' 第 ' + (i + 1) + '/' + pagelist.length + ' 个'
                     this.mwApi.edit(
                         page, function (revision: any) { return { text: revision.content.replace(before, after), summary: summ, minor: true }; }
-                    ).then(() => { console.log('第 ' + (i + 1) + '/' + pagelist.length + ' 个编辑已保存: ' + page); });
+                    ).then(() => { obj.log('第 ' + (i + 1) + '/' + pagelist.length + ' 个编辑已保存: ' + page); });
                 }, i * timeInterval)
             }
         }
+        listEdit(before: string | RegExp, after: string, timeInterval: number, debug = true) {
+            this.wikiEdit(this.titleList, before, after, timeInterval, debug, '列表替换：替换 “' + before + '” 为 “' + after + '”')
+        }
+        newSection(header: string, text: string) {
+            let page: string = mw.config.get("wgPageName"), obj = this
+            if (!this.pagenameCheck(page) || !this.mwApi) { return } // mwApi 属性是mw.Api的实例，异步取得
+            this.mwApi.newSection(page, header, text, { summary: '添加“' + header + '”', minor: true })
+                .then(() => { obj.log('新章节' + header + '已保存: ' + page); });
+        }
+
+        wikiSearch(str: string, namespace: string | number = '0', limit: string | number = 'max') {
+            this.wikiSearchAndReplace(str, '', '', namespace, limit, 1, 0, 'text')
+        }
+        wikiSearchTitle(str: string, namespace: string | number = '0', limit: string | number = 'max') {
+            this.wikiSearchAndReplace(str, '', '', namespace, limit, 1, 0, 'title')
+        }
+
+        wikiSearchAndReplace(str: string, before: string | RegExp, after: string, namespace: string | number | Array<number> | Array<string> = '0',
+            limit: string | number = 'max', timeInterval: number = 500, handle?: number, srwhat = 'text') {
+            let obj = this
+            if (!this.mwApi) { return }
+            if (namespace instanceof Array) {
+                namespace = namespace.join('|')
+            }
+            this.log('搜索中...')
+            this.mwApi.get({
+                action: 'query',
+                format: 'json',
+                list: 'search',
+                srsearch: str,
+                srlimit: limit + '',
+                srnamespace: namespace + '',
+                srwhat: srwhat,
+            }).done(function (data: any) {
+                obj.log('正在处理返回信息...')
+                if (typeof data.query != 'undefined' && typeof data.query.search != 'undefined') {
+                    let res: querySearchArray[] = data.query.search, titleList: string[] = []
+                    for (let x of res) {
+                        titleList.push(x.title)
+                    }
+                    obj.log(titleList)
+                    obj.titleList = titleList.join('; ')
+                    if (typeof handle == 'undefined' || handle != 0) {
+                        obj.log('成功获取信息，开始执行替换工作')
+                        obj.wikiEdit(obj.titleList, before, after, timeInterval, true, '搜索替换：搜索“' + before + '” 替换为 “' + after + '”')
+                    }
+                } else {
+                    obj.log('没有成功获取到信息')
+                }
+            });
+        }
+
         pagenameCheck(pagename: string): boolean {
             if (!pagename) {
                 return false
@@ -168,7 +249,7 @@
             let safe = 0
             while (typeof mw == 'undefined') {
                 await this.sleep(500);
-                this.assert(safe++ < 20, '未检测到 mw ！')
+                this.assert(safe++ < 30, '未检测到 mw ！')
             }
         }
         // 等待mw和mw.Api加载完毕，使用await关键字
@@ -177,15 +258,16 @@
             let safe = 0
             while (typeof mw.Api == 'undefined') {
                 await this.sleep(500);
-                this.assert(safe++ < 20, '未检测到 mw ！')
+                this.assert(safe++ < 30, '未检测到 mw ！')
             }
         }
     }
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
     // 封装删改功能，给mw.Api的原型添加方法
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
     class SaltWikiEditHelper extends SaltWikiEditOroginalClass {
         constructor() {
             super()
-            // 参数
             // 检查mw.Api原型的方法
             this.addPlugin();
             // 完成构造
@@ -196,7 +278,7 @@
             this.pageEdit(before, after, sum || '替换 “' + before + '” 为 “' + after + '”')
         }
         pageReplaceAll(content = '', sum?: string) {
-            this.pageEdit(/.*/, content, sum || '整页替换为“' + content + '”')
+            this.pageEdit(/[\S\s]*/g, content, sum || '整页替换为“' + content + '”')
         }
         pageAppend(content = '', sum?: string) {
             this.pageEdit(/$/, content, sum || '添加“' + content + '”到页尾')
@@ -215,6 +297,27 @@
             this.wikiEdit(pages, /^/, content, timeInterval, debug, '批量添加：添加“' + content + '”到页首')
         }
 
+        searchMain(str: string, limit: string = 'max') { this.wikiSearch(str, '0', limit) }
+        searchUserpage(str: string, limit: string = 'max') { this.wikiSearch(str, '2', limit) }
+        searchProject(str: string, limit: string = 'max') { this.wikiSearch(str, '4', limit) }
+        searchFile(str: string, limit: string = 'max') { this.wikiSearch(str, '6', limit) }
+        searchMediaWiki(str: string, limit: string = 'max') { this.wikiSearch(str, '8', limit) }
+        searchTemplate(str: string, limit: string = 'max') { this.wikiSearch(str, '10', limit) }
+        searchHelp(str: string, limit: string = 'max') { this.wikiSearch(str, '12', limit) }
+        searchCategory(str: string, limit: string = 'max') { this.wikiSearch(str, '14', limit) }
+        searchWidget(str: string, limit: string = 'max') { this.wikiSearch(str, '274', limit) }
+        searchGadget(str: string, limit: string = 'max') { this.wikiSearch(str, '2300', limit) }
+
+        searchMainTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '0', limit) }
+        searchUserpageTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '2', limit) }
+        searchProjectTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '4', limit) }
+        searchFileTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '6', limit) }
+        searchMediaWikiTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '8', limit) }
+        searchTemplateTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '10', limit) }
+        searchHelpTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '12', limit) }
+        searchCategoryTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '14', limit) }
+        searchWidgetTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '274', limit) }
+        searchGadgetTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '2300', limit) }
         // addPlugin: 给mw.Api的原型添加方法
         async addPlugin() {
             await this.waitMwApi()// 等待mw和mw.Api加载完毕
@@ -243,18 +346,28 @@
     // ==UserScript==
     // @name         Wiki编辑工具
     // @namespace    http://salt.is.lovely/
-    // @version      0.1.2
+    // @version      0.1.3
     // @description  Wiki编辑工具
     // @author       Salt
     // @match        https://mcbbs-wiki.cn/index.php?*
     // @match        https://mcbbs-wiki.cn/wiki/*
     // @match        https://wiki.biligame.com/mcplayer/*
     // @grant        none
-    // ==/UserScript==    
+    // ==/UserScript==
     setTimeout(() => {
-        let we = new SaltWikiEditHelper(); console.log('可用实例: we')
-        if (typeof window.we == 'undefined') {
-            window.we = we;
+        let we = new SaltWikiEditHelper()
+        try {
+            window.we = we
+            console.log('可用实例: we')
+        }
+        catch (e: any) {
+            console.warn(e)
+            console.log('实例 we 不可用')
+        }
+        finally {
+            window.saltWikiEditor = we
+            window.saltWikiEditorClass = SaltWikiEditHelper
+            console.log('可用实例: saltWikiEditor\n可用class: saltWikiEditorClass')
         }
     }, 500)
 })();

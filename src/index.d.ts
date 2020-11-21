@@ -1,5 +1,7 @@
 interface Window {
     we: any,
+    saltWikiEditor: any,
+    saltWikiEditorClass: any
 }
 declare var mw: MediaWiki;
 interface MediaWiki {
@@ -20,6 +22,7 @@ interface mwApi {
     abort(),
     postWithEditToken(params: any, additionalParams: any),
     getEditToken(),
+    get(parameters: object, ajaxOptions?: object): JQueryPromise,
     create(title: string, params: any, content: any),
     edit(title: string, transform: any),
     newSection(title: string, header: any, message: any, additionalParams: any),
@@ -27,4 +30,13 @@ interface mwApi {
     getToken(s: string),
     watch(pages: string),
     unwatch(pages: string)
+}
+interface querySearchArray {
+    ns: number,
+    title: string,
+    pagid: number,
+    size: number,
+    wordcount: number,
+    snippet: string,
+    timestamp: string
 }
