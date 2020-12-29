@@ -67,7 +67,7 @@
         输出自己的用户名、UID、用户组
     we.note()
         详细教程`
-    let vers = '0.1.3', pref = '[SaltWikiEditHelper]'
+    let vers = '0.1.4', pref = '[SaltWikiEditHelper]'
     /////////////////////////////////////////////////////////////////////////////////////////////////////
     // 最基础的类
     /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,10 +121,12 @@
     class SaltWikiEditOroginalClass extends SaltOroginalClass {
         mwApi: mwApi | undefined // 啊啊啊啊这个检查好烦啊（虽然帮忙找错很管用）
         titleList: string = ''
+        token: string = ''
         constructor() {
             super(pref, vers, myNote)
             // 参数
             this.getMwApi()
+            this.getToken()
         }
         pageEdit(before: string | RegExp = /$/, after = '', sum = '') {
             let page: string = mw.config.get("wgPageName")
@@ -153,11 +155,29 @@
                 let summ = sum
                 setTimeout(() => {
                     if (!this.mwApi) { return } // mwApi 属性是mw.Api的实例，异步取得
-                    obj.log(page);
+                    obj.log(' | 第 ' + (i + 1) + '/' + pagelist.length + ' 个页面: ' + page);
                     summ += ' 第 ' + (i + 1) + '/' + pagelist.length + ' 个'
                     this.mwApi.edit(
                         page, function (revision: any) { return { text: revision.content.replace(before, after), summary: summ, minor: true }; }
                     ).then(() => { obj.log('第 ' + (i + 1) + '/' + pagelist.length + ' 个编辑已保存: ' + page); });
+                }, i * timeInterval)
+            }
+        }
+        wikiCreate(pages: string, text: string, timeInterval: number = 250, debug = true, sum?: string) {
+            if (!this.mwApi) { return } // mwApi 属性是mw.Api的实例，异步取得
+            let obj = this
+            let pagelist = pages.split('; '); if (pagelist.length < 1) { return } // 不替换就不替换
+            sum = sum || '批量创建页面, 内容为“' + text + '”'
+            if (debug) { this.log(pagelist); this.log(sum) }
+            for (let i = 0; i < pagelist.length; i++) {
+                let page = pagelist[i]; if (!this.pagenameCheck(page)) { continue } // 页面名怎么会少于 2个 字符呢
+                let summ = sum
+                setTimeout(() => {
+                    if (!this.mwApi) { return } // mwApi 属性是mw.Api的实例，异步取得
+                    obj.log(' | 第 ' + (i + 1) + '/' + pagelist.length + ' 个页面: ' + page);
+                    summ += ' 第 ' + (i + 1) + '/' + pagelist.length + ' 个'
+                    this.mwApi.create(page, { summary: summ, }, text)
+                        .then(() => { obj.log('第 ' + (i + 1) + '/' + pagelist.length + ' 个页面已保存: ' + page); });
                 }, i * timeInterval)
             }
         }
@@ -213,6 +233,33 @@
             });
         }
 
+        DeletePage(title: string, reason = '未填写理由', handle = 0) {
+            let obj = this
+            if (!this.mwApi) { return }
+            this.log(title); this.log(reason);
+            // this.log(obj.token)
+            this.mwApi.post({
+                action: 'delete',
+                format: 'json',
+                title: title,
+                reason: reason,
+                token: obj.token,
+            }).done(function (data: any) {
+                obj.log('操作完成: ' + title)
+                obj.log(data)
+                switch (handle) {
+                    case 1:
+                        location.reload();
+                        break
+                    case 2:
+                        break
+                    default:
+                        if (confirm("删除操作已送达服务器，是否刷新页面？")) { location.reload(); }
+                        break
+                }
+            });
+        }
+
         pagenameCheck(pagename: string): boolean {
             if (!pagename) {
                 return false
@@ -244,6 +291,17 @@
             this.log('已获取mw.Api实例，可以开始工作...')
         }
 
+        async getToken() {
+            await this.waitMwApi()// 等待mw和mw.Api加载完毕
+            if (!this.mwApi) { this.mwApi = new mw.Api() }
+            let obj = this
+            this.mwApi.get({
+                action: 'query',
+                meta: 'tokens'
+            }).done(function (data: any) {
+                obj.token = data.query.tokens.csrftoken
+            });
+        }
         // 等待mw加载完毕，使用await关键字
         async waitMw() {
             let safe = 0
@@ -318,6 +376,12 @@
         searchCategoryTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '14', limit) }
         searchWidgetTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '274', limit) }
         searchGadgetTitle(str: string, limit: string = 'max') { this.wikiSearchTitle(str, '2300', limit) }
+
+        pageDelete(reason?: string) {
+            let page: string = mw.config.get("wgPageName")
+            if (!this.pagenameCheck(page) || !this.mwApi) { return } // mwApi 属性是mw.Api的实例，异步取得
+            this.DeletePage(page, reason, 1)
+        }
         // addPlugin: 给mw.Api的原型添加方法
         async addPlugin() {
             await this.waitMwApi()// 等待mw和mw.Api加载完毕
@@ -346,7 +410,7 @@
     // ==UserScript==
     // @name         Wiki编辑工具
     // @namespace    http://salt.is.lovely/
-    // @version      0.1.3
+    // @version      0.1.5
     // @description  Wiki编辑工具
     // @author       Salt
     // @match        https://mcbbs-wiki.cn/index.php?*
@@ -369,5 +433,5 @@
             window.saltWikiEditorClass = SaltWikiEditHelper
             console.log('可用实例: saltWikiEditor\n可用class: saltWikiEditorClass')
         }
-    }, 500)
+    }, 0)
 })();
